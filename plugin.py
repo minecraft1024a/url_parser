@@ -50,6 +50,7 @@ class URLParserPlugin(BasePlugin):
 
         try:
             from .engines.crawl4ai_engine import Crawl4AIEngine
+            from .engines.trafilatura_engine import TrafilaturaEngine
 
             # 类型安全地获取配置
             config = self.config if isinstance(self.config, UrlParserConfig) else None
@@ -63,7 +64,18 @@ class URLParserPlugin(BasePlugin):
             else:
                 logger.warning(
                     "❌ 引擎 Crawl4AI: 不可用（未安装 crawl4ai 或其依赖）。"
-                    "请运行: uv add crawl4ai && crawl4ai-install"
+                    "请运行: uv pip install crawl4ai && crawl4ai-install"
+                )
+
+            trafilatura_engine = TrafilaturaEngine(config)
+            available = trafilatura_engine.is_available()
+
+            if available:
+                logger.info("✅ 引擎 Trafilatura: 可用")
+            else:
+                logger.warning(
+                    "❌ 引擎 Trafilatura: 不可用（未安装 trafilatura 或其依赖）。"
+                    "请运行: uv pip install trafilatura"
                 )
 
         except Exception as e:

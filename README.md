@@ -11,6 +11,7 @@ URL 内容解析插件，为 Neo-MoFox 提供可扩展的多引擎 URL 解析能
 | 引擎 | 类型 | 特点 | 状态 |
 |------|------|------|------|
 | **Crawl4AI** | 渲染型 | 基于 Playwright，支持 JS 渲染，输出 Markdown | ✅ 首个内置 |
+| **Trafilatura** | 轻量型 | 基于 httpx+trafilatura，无浏览器依赖，元数据丰富 | ✅ 内置 |
 | **httpx** | 轻量型 | 基于 httpx+BeautifulSoup，无浏览器依赖，快速 | 🔜 可选内置 |
 | 自定义引擎 | — | 继承 `BaseParseEngine` 即可接入 | 🔧 可扩展 |
 
@@ -42,6 +43,8 @@ URL 内容解析插件，为 Neo-MoFox 提供可扩展的多引擎 URL 解析能
 
 ### 1. 依赖安装
 
+#### Crawl4AI 引擎（渲染型，可选）
+
 Crawl4AI 引擎需要 Playwright 浏览器环境：
 
 ```bash
@@ -50,6 +53,15 @@ uv add crawl4ai
 
 # 安装 Playwright 浏览器
 crawl4ai-install
+```
+
+#### Trafilatura 引擎（轻量型，推荐）
+
+Trafilatura 引擎无需浏览器环境，资源占用低：
+
+```bash
+# 安装 Python 依赖
+uv add trafilatura
 ```
 
 ### 2. 启用插件
@@ -75,7 +87,8 @@ enable_url_parser_service = true    # 启用 Service 组件（供插件调用）
 [engines]
 # 引擎使用顺序（从前到后依次尝试）
 # 站点规则未命中时，按此顺序回退
-engine_order = ["crawl4ai"]
+# 推荐：渲染优先 + 轻量回退
+engine_order = ["crawl4ai", "trafilatura"]
 
 # 默认超时时间（秒）
 default_timeout = 30
@@ -106,6 +119,24 @@ remove_overlay_elements = true          # 移除弹窗/遮罩
 
 # 是否启用 JS 执行
 enable_js = false
+```
+
+### Trafilatura 引擎配置
+
+```toml
+[trafilatura]
+# HTTP 请求配置
+timeout = 15                            # 请求超时（秒）
+follow_redirects = true                 # 跟随重定向
+user_agent = "Mozilla/5.0 (compatible; UrlParser/1.0)"
+
+# 内容提取配置
+output_format = "markdown"              # 输出格式：markdown / txt / html
+include_comments = false                # 是否提取评论
+include_tables = true                   # 是否提取表格
+include_links = false                   # 是否保留链接（实验性）
+deduplicate = true                      # 是否去重
+target_language = ""                    # 目标语言（ISO 639-1），留空不限
 ```
 
 ### 代理配置（可选）
@@ -389,7 +420,8 @@ url_parser/
 │       └── url_parse_service.py     # 插件间 Service 组件
 ├── engines/                         # 引擎层
 │   ├── base.py                      # 引擎抽象基类
-│   └── crawl4ai_engine.py           # Crawl4AI 引擎
+│   ├── crawl4ai_engine.py           # Crawl4AI 引擎
+│   └── trafilatura_engine.py        # Trafilatura 引擎
 ├── managers/                        # 管理器层
 │   └── parse_manager.py             # 解析管理器
 ├── utils/                           # 工具函数
@@ -421,4 +453,5 @@ GPL-3.0
 
 - [Neo-MoFox 官网](https://github.com/MoFox-Studio/Neo-MoFox)
 - [Crawl4AI 文档](https://docs.crawl4ai.com/)
+- [Trafilatura 文档](https://trafilatura.readthedocs.io/)
 - [插件开发文档](https://docs.mofox-sama.com/docs/development/)

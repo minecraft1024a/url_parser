@@ -52,10 +52,10 @@ async def demo_parse_with_engine() -> None:
         print("❌ 无法获取 URLParseService")
         return
 
-    # 强制使用 crawl4ai 引擎，并指定 CSS 选择器
+    # 强制使用 trafilatura 引擎（轻量，无需浏览器）
     response = await parse_service.parse(
         "https://news.example.com/article/123",
-        engine="crawl4ai",
+        engine="trafilatura",
         css_selector="main.article-body",
         timeout=60,
     )
@@ -104,7 +104,7 @@ async def demo_engine_status() -> None:
     print(f"可用引擎: {available}")
 
     # 检查单个引擎状态
-    for engine_name in ["crawl4ai", "httpx", "nonexistent"]:
+    for engine_name in ["crawl4ai", "trafilatura", "httpx", "nonexistent"]:
         status = await parse_service.get_engine_status(engine_name)
         print(f"  {engine_name}: exists={status['exists']}, available={status['available']}")
     print()

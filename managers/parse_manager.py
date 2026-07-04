@@ -13,6 +13,7 @@ from src.kernel.logger import get_logger
 
 from ..engines.base import BaseParseEngine, ParseResult
 from ..engines.crawl4ai_engine import Crawl4AIEngine
+from ..engines.trafilatura_engine import TrafilaturaEngine
 from ..utils.site_matcher import SiteMatcher
 from ..utils.url_utils import is_valid_url, truncate_content
 
@@ -150,6 +151,7 @@ class ParseManager:
         """初始化所有引擎实例并注册到字典。"""
         self.engines = {
             "crawl4ai": Crawl4AIEngine(self.config),
+            "trafilatura": TrafilaturaEngine(self.config),
         }
 
         # 报告引擎可用性

@@ -1,7 +1,7 @@
 {
     "name": "url_parser",
     "version": "1.0.0",
-    "description": "URL 内容解析插件，支持多引擎（Crawl4AI）和站点级路由",
+    "description": "URL 内容解析插件，支持多引擎（Crawl4AI、Trafilatura）和站点级路由",
     "author": "Yishan",
     "homepage": "https://github.com/minecraft1024a/url_parser",
     "license": "GPL-3.0",
@@ -9,6 +9,7 @@
         "url",
         "parser",
         "crawl4ai",
+        "trafilatura",
         "web",
         "tool",
         "service"
@@ -20,7 +21,8 @@
     "python_dependencies": [
         "crawl4ai>=0.4.0",
         "httpx>=0.24.0",
-        "beautifulsoup4>=4.11.0"
+        "beautifulsoup4>=4.11.0",
+        "trafilatura>=1.12.0"
     ],
     "include": [
         {
@@ -52,6 +54,7 @@
         "url",
         "parser",
         "crawl4ai",
+        "trafilatura",
         "web"
     ]
 }

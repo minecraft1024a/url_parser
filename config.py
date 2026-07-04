@@ -1,7 +1,7 @@
 """URL Parser 插件配置定义。
 
 定义插件的全部配置节，包括引擎全局配置、Crawl4AI 引擎配置、
-httpx 引擎配置、代理配置和站点路由规则。
+trafilatura 引擎配置、httpx 引擎配置、代理配置和站点路由规则。
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from src.core.components.base.config import BaseConfig, Field, SectionBase, conf
 class UrlParserConfig(BaseConfig):
     """URL Parser 插件配置。
 
-    包含插件基本设置、组件开关、引擎全局配置、Crawl4AI/httpx 引擎专属配置、
+    包含插件基本设置、组件开关、引擎全局配置、Crawl4AI/trafilatura/httpx 引擎专属配置、
     代理配置以及站点路由规则。
     """
 
@@ -81,7 +81,7 @@ class UrlParserConfig(BaseConfig):
             input_type="list",
             item_type="str",
             tag="list",
-            hint="可选：crawl4ai, httpx",
+            hint="可选：crawl4ai, trafilatura, httpx",
             order=0,
         )
         default_timeout: int = Field(
@@ -211,6 +211,84 @@ class UrlParserConfig(BaseConfig):
             order=10,
         )
 
+    # ── trafilatura 引擎配置 ─────────────────────────────────────
+
+    @config_section("trafilatura", title="Trafilatura 配置", tag="general")
+    class TrafilaturaSection(SectionBase):
+        """trafilatura 引擎专属配置。
+
+        trafilatura 引擎是轻量级解析方案，无需浏览器环境，
+        基于 httpx 抓取 + trafilatura 正文提取，适合静态 HTML 页面。
+        """
+
+        timeout: int = Field(
+            default=15,
+            description="HTTP 请求超时时间（秒）",
+            label="请求超时",
+            ge=3,
+            le=60,
+            input_type="slider",
+            tag="network",
+            order=0,
+        )
+        follow_redirects: bool = Field(
+            default=True,
+            description="是否跟随 HTTP 重定向",
+            label="跟随重定向",
+            tag="general",
+            order=1,
+        )
+        user_agent: str = Field(
+            default="Mozilla/5.0 (compatible; UrlParser/1.0)",
+            description="请求头 User-Agent",
+            label="User-Agent",
+            tag="network",
+            order=2,
+        )
+        output_format: str = Field(
+            default="markdown",
+            description="trafilatura 输出格式：markdown / txt / html",
+            label="输出格式",
+            tag="general",
+            order=3,
+        )
+        include_comments: bool = Field(
+            default=False,
+            description="是否提取评论内容",
+            label="包含评论",
+            tag="general",
+            order=4,
+        )
+        include_tables: bool = Field(
+            default=True,
+            description="是否提取表格内容",
+            label="包含表格",
+            tag="general",
+            order=5,
+        )
+        include_links: bool = Field(
+            default=False,
+            description="是否保留链接及其目标（实验性）",
+            label="包含链接",
+            tag="general",
+            order=6,
+        )
+        deduplicate: bool = Field(
+            default=True,
+            description="是否移除重复段落和文档",
+            label="去重",
+            tag="general",
+            order=7,
+        )
+        target_language: str = Field(
+            default="",
+            description="目标语言（ISO 639-1 格式，如 zh/en），留空表示不限语言",
+            label="目标语言",
+            placeholder="zh",
+            tag="general",
+            order=8,
+        )
+
     # ── httpx 引擎配置 ──────────────────────────────────────────
 
     @config_section("httpx", title="httpx 配置", tag="general")
@@ -334,6 +412,7 @@ class UrlParserConfig(BaseConfig):
     components: ComponentsSection = Field(default_factory=ComponentsSection)
     engines: EnginesSection = Field(default_factory=EnginesSection)
     crawl4ai: Crawl4AISection = Field(default_factory=Crawl4AISection)
+    trafilatura: TrafilaturaSection = Field(default_factory=TrafilaturaSection)
     httpx: HttpxSection = Field(default_factory=HttpxSection)
     proxy: ProxySection = Field(default_factory=ProxySection)
     site_rules: SiteRulesSection = Field(default_factory=SiteRulesSection)
