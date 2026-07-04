@@ -192,7 +192,7 @@ class SiteMatcher:
         """从配置数据创建匹配器。
 
         Args:
-            rules_data: 规则字典列表（来自配置 site_rules.rules）
+            rules_data: 规则字典列表（来自配置 site_rules.items）
 
         Returns:
             SiteMatcher 实例

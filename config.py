@@ -2,6 +2,8 @@
 
 定义插件的全部配置节，包括引擎全局配置、Crawl4AI 引擎配置、
 trafilatura 引擎配置、httpx 引擎配置、代理配置和站点路由规则。
+所有字段均带 WebUI 增强参数（input_type / step / choices / hint 等），
+供 WebUI 可视化配置编辑器渲染表单使用。
 """
 
 from __future__ import annotations
@@ -9,6 +11,81 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 from src.core.components.base.config import BaseConfig, Field, SectionBase, config_section
+
+
+class SiteRuleEntry(SectionBase):
+    """单条站点路由规则。
+
+    定义如何为匹配的 URL 选择引擎及参数。
+    规则按 ``priority`` 降序匹配，优先级高的规则先匹配。
+    """
+
+    name: str = Field(
+        default="",
+        description="规则名称（用于日志和调试）",
+        label="规则名称",
+        placeholder="例：GitHub 规则",
+        hint="仅用于日志和调试识别，不影响匹配逻辑",
+        tag="general",
+        order=0,
+    )
+    match_type: str = Field(
+        default="domain",
+        description='匹配类型，"domain" 或 "regex"',
+        label="匹配类型",
+        choices=["domain", "regex"],
+        hint="domain 按域名匹配，regex 使用正则表达式匹配完整 URL",
+        tag="general",
+        order=1,
+    )
+    match_pattern: str = Field(
+        default="",
+        description="域名或正则表达式",
+        label="匹配模式",
+        placeholder="example.com 或 ^https?://.*",
+        hint="domain 模式下填写域名（如 github.com）；regex 模式下填写完整正则表达式",
+        tag="general",
+        order=2,
+    )
+    engine: str = Field(
+        default="",
+        description="使用的引擎名称（crawl4ai / trafilatura / httpx）",
+        label="引擎",
+        choices=["crawl4ai", "trafilatura", "httpx"],
+        hint="留空则使用引擎顺序中的默认引擎",
+        tag="general",
+        order=3,
+    )
+    css_selector: str | None = Field(
+        default=None,
+        description="CSS 选择器（可选，仅对支持选择器的引擎生效）",
+        label="CSS 选择器",
+        placeholder=".article-content",
+        hint="仅对 crawl4ai 引擎生效，留空则提取整页正文",
+        tag="advanced",
+        order=4,
+    )
+    extra_options: dict[str, Any] = Field(
+        default_factory=dict,
+        description="引擎特定额外选项（可选，键值对）",
+        label="额外选项",
+        input_type="json",
+        hint="引擎特定的额外参数，以 JSON 对象形式填写",
+        tag="advanced",
+        order=5,
+    )
+    priority: int = Field(
+        default=0,
+        description="优先级，数值越大越优先匹配",
+        label="优先级",
+        ge=0,
+        le=100,
+        input_type="slider",
+        step=1,
+        hint="数值越大越优先匹配，相同优先级按列表顺序匹配",
+        tag="general",
+        order=6,
+    )
 
 
 class UrlParserConfig(BaseConfig):
@@ -31,6 +108,7 @@ class UrlParserConfig(BaseConfig):
             default=True,
             description="是否启用插件",
             label="启用插件",
+            input_type="switch",
             tag="plugin",
             order=0,
         )
@@ -53,6 +131,8 @@ class UrlParserConfig(BaseConfig):
             default=True,
             description="是否启用 URL 解析工具（供 LLM 调用）",
             label="启用解析工具",
+            input_type="switch",
+            hint="启用后 LLM 可通过工具调用解析 URL 内容",
             tag="plugin",
             order=0,
         )
@@ -60,6 +140,8 @@ class UrlParserConfig(BaseConfig):
             default=True,
             description="是否启用 URL 解析服务（供其他插件调用）",
             label="启用解析服务",
+            input_type="switch",
+            hint="启用后其他插件可通过 Service API 调用 URL 解析能力",
             tag="plugin",
             order=1,
         )
@@ -81,7 +163,7 @@ class UrlParserConfig(BaseConfig):
             input_type="list",
             item_type="str",
             tag="list",
-            hint="可选：crawl4ai, trafilatura, httpx",
+            hint="可选：crawl4ai, trafilatura, httpx。站点规则未命中时按此顺序依次尝试",
             order=0,
         )
         default_timeout: int = Field(
@@ -91,6 +173,8 @@ class UrlParserConfig(BaseConfig):
             ge=5,
             le=120,
             input_type="slider",
+            step=5,
+            hint="引擎未单独指定超时时间时使用此默认值",
             tag="performance",
             order=1,
         )
@@ -101,6 +185,8 @@ class UrlParserConfig(BaseConfig):
             ge=500,
             le=50000,
             input_type="slider",
+            step=500,
+            hint="解析结果超出此长度将被截断，影响 LLM 上下文消耗",
             tag="performance",
             order=2,
         )
@@ -118,6 +204,8 @@ class UrlParserConfig(BaseConfig):
             default=True,
             description="是否使用无头浏览器模式",
             label="无头模式",
+            input_type="switch",
+            hint="无头模式下浏览器不显示图形界面，适合服务器环境",
             tag="general",
             order=0,
         )
@@ -127,6 +215,9 @@ class UrlParserConfig(BaseConfig):
             label="视口宽度",
             ge=320,
             le=3840,
+            input_type="slider",
+            step=10,
+            hint="影响页面渲染布局，部分响应式站点会因视口宽度返回不同内容",
             tag="general",
             order=1,
         )
@@ -136,6 +227,9 @@ class UrlParserConfig(BaseConfig):
             label="视口高度",
             ge=240,
             le=2160,
+            input_type="slider",
+            step=10,
+            hint="影响页面渲染布局，部分懒加载内容需足够高度才会触发加载",
             tag="general",
             order=2,
         )
@@ -146,6 +240,8 @@ class UrlParserConfig(BaseConfig):
             ge=5000,
             le=300000,
             input_type="slider",
+            step=1000,
+            hint="页面加载和导航的超时时间，单位为毫秒",
             tag="network",
             order=3,
         )
@@ -154,6 +250,7 @@ class UrlParserConfig(BaseConfig):
             description="等待条件，如 'css:.content-loaded'，留空表示不等待",
             label="等待条件",
             placeholder="css:.content-loaded",
+            hint="支持 css: 选择器、js: JS 表达式等前缀，留空表示不等待",
             tag="general",
             order=4,
         )
@@ -164,6 +261,8 @@ class UrlParserConfig(BaseConfig):
             ge=0.0,
             le=30.0,
             input_type="slider",
+            step=0.5,
+            hint="抓取 HTML 前的等待时间，用于动态内容加载",
             tag="performance",
             order=5,
         )
@@ -174,6 +273,8 @@ class UrlParserConfig(BaseConfig):
             ge=0.0,
             le=1.0,
             input_type="slider",
+            step=0.1,
+            hint="PruningContentFilter 阈值，值越高过滤越严格，保留的核心内容越少",
             tag="performance",
             order=6,
         )
@@ -181,6 +282,8 @@ class UrlParserConfig(BaseConfig):
             default=True,
             description="是否移除弹窗、遮罩等覆盖层元素",
             label="移除遮罩",
+            input_type="switch",
+            hint="移除弹窗、广告遮罩等覆盖层元素，提升正文提取质量",
             tag="general",
             order=7,
         )
@@ -189,6 +292,7 @@ class UrlParserConfig(BaseConfig):
             description="自定义用户代理，留空使用默认",
             label="用户代理",
             placeholder="Mozilla/5.0 ...",
+            hint="留空使用 Crawl4AI 默认 User-Agent",
             tag="network",
             order=8,
         )
@@ -196,6 +300,8 @@ class UrlParserConfig(BaseConfig):
             default=False,
             description="是否启用 JavaScript 执行",
             label="启用 JS",
+            input_type="switch",
+            hint="启用后会执行页面 JavaScript，适合 SPA 站点但会增加抓取耗时",
             tag="general",
             order=9,
         )
@@ -228,6 +334,8 @@ class UrlParserConfig(BaseConfig):
             ge=3,
             le=60,
             input_type="slider",
+            step=1,
+            hint="httpx 抓取页面的超时时间",
             tag="network",
             order=0,
         )
@@ -235,6 +343,7 @@ class UrlParserConfig(BaseConfig):
             default=True,
             description="是否跟随 HTTP 重定向",
             label="跟随重定向",
+            input_type="switch",
             tag="general",
             order=1,
         )
@@ -242,6 +351,7 @@ class UrlParserConfig(BaseConfig):
             default="Mozilla/5.0 (compatible; UrlParser/1.0)",
             description="请求头 User-Agent",
             label="User-Agent",
+            hint="部分站点会根据 User-Agent 返回不同内容",
             tag="network",
             order=2,
         )
@@ -249,6 +359,8 @@ class UrlParserConfig(BaseConfig):
             default="markdown",
             description="trafilatura 输出格式：markdown / txt / html",
             label="输出格式",
+            choices=["markdown", "txt", "html"],
+            hint="markdown 适合 LLM 阅读，txt 为纯文本，html 保留原始标签",
             tag="general",
             order=3,
         )
@@ -256,6 +368,8 @@ class UrlParserConfig(BaseConfig):
             default=False,
             description="是否提取评论内容",
             label="包含评论",
+            input_type="switch",
+            hint="启用后会提取页面中的评论内容",
             tag="general",
             order=4,
         )
@@ -263,6 +377,8 @@ class UrlParserConfig(BaseConfig):
             default=True,
             description="是否提取表格内容",
             label="包含表格",
+            input_type="switch",
+            hint="启用后会提取页面中的表格数据",
             tag="general",
             order=5,
         )
@@ -270,6 +386,8 @@ class UrlParserConfig(BaseConfig):
             default=False,
             description="是否保留链接及其目标（实验性）",
             label="包含链接",
+            input_type="switch",
+            hint="实验性功能，启用后会保留文档中的链接及其目标",
             tag="general",
             order=6,
         )
@@ -277,6 +395,8 @@ class UrlParserConfig(BaseConfig):
             default=True,
             description="是否移除重复段落和文档",
             label="去重",
+            input_type="switch",
+            hint="启用后会移除重复段落，减少冗余内容",
             tag="general",
             order=7,
         )
@@ -285,6 +405,8 @@ class UrlParserConfig(BaseConfig):
             description="目标语言（ISO 639-1 格式，如 zh/en），留空表示不限语言",
             label="目标语言",
             placeholder="zh",
+            pattern=r"^[a-z]{2}$",
+            hint="ISO 639-1 两字母语言代码（如 zh、en、ja），留空表示不限语言",
             tag="general",
             order=8,
         )
@@ -305,6 +427,8 @@ class UrlParserConfig(BaseConfig):
             ge=3,
             le=60,
             input_type="slider",
+            step=1,
+            hint="httpx 请求超时时间",
             tag="network",
             order=0,
         )
@@ -312,6 +436,7 @@ class UrlParserConfig(BaseConfig):
             default=True,
             description="是否跟随重定向",
             label="跟随重定向",
+            input_type="switch",
             tag="general",
             order=1,
         )
@@ -319,6 +444,7 @@ class UrlParserConfig(BaseConfig):
             default="Mozilla/5.0 (compatible; UrlParser/1.0)",
             description="请求头 User-Agent",
             label="User-Agent",
+            hint="部分站点会根据 User-Agent 返回不同内容",
             tag="network",
             order=2,
         )
@@ -329,6 +455,8 @@ class UrlParserConfig(BaseConfig):
             ge=500,
             le=50000,
             input_type="slider",
+            step=500,
+            hint="仅对 httpx 引擎生效，超出此长度的内容将被截断",
             tag="performance",
             order=3,
         )
@@ -343,6 +471,8 @@ class UrlParserConfig(BaseConfig):
             default=False,
             description="是否启用代理",
             label="启用代理",
+            input_type="switch",
+            hint="启用后所有引擎的 HTTP 请求都将通过指定代理发送",
             tag="network",
             order=0,
         )
@@ -383,27 +513,15 @@ class UrlParserConfig(BaseConfig):
     class SiteRulesSection(SectionBase):
         """站点路由规则配置。
 
-        每条规则定义如何为匹配的 URL 选择引擎及参数。
+        在 TOML 中以 [[site_rules.items]] 数组形式定义多条规则。
         规则按 ``priority`` 降序匹配，优先级高的规则先匹配。
-
-        规则字段：
-        - name: 规则名称
-        - match_type: "domain" 或 "regex"
-        - match_pattern: 域名或正则表达式
-        - engine: 使用的引擎名称
-        - css_selector: CSS 选择器（可选）
-        - extra_options: 引擎特定额外选项（可选）
-        - priority: 优先级，数值越大越优先（默认 0）
         """
 
-        rules: list[dict[str, Any]] = Field(
-            default=[],
+        items: list[SiteRuleEntry] = Field(
+            default_factory=list,
             description="站点路由规则列表",
             label="路由规则",
-            input_type="list",
-            item_type="object",
-            tag="list",
-            order=0,
+            hint="为特定 URL 指定引擎和参数，规则按优先级降序匹配",
         )
 
     # ── 配置节实例 ──────────────────────────────────────────────

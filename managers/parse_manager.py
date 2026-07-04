@@ -171,7 +171,16 @@ class ParseManager:
             self._site_matcher = SiteMatcher([])
             return
 
-        rules_data = getattr(site_rules_cfg, "rules", [])
+        # site_rules.items 为 SiteRuleEntry 实例列表，转换为字典列表
+        # 供 SiteMatcher.from_config 使用
+        items = getattr(site_rules_cfg, "items", [])
+        rules_data: list[dict[str, Any]] = []
+        for item in items:
+            if hasattr(item, "model_dump"):
+                rules_data.append(item.model_dump())
+            elif isinstance(item, dict):
+                rules_data.append(item)
+
         self._site_matcher = SiteMatcher.from_config(rules_data)
 
         logger.info(f"已加载 {len(rules_data)} 条站点规则")
