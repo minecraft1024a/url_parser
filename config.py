@@ -405,7 +405,7 @@ class UrlParserConfig(BaseConfig):
             description="目标语言（ISO 639-1 格式，如 zh/en），留空表示不限语言",
             label="目标语言",
             placeholder="zh",
-            pattern=r"^[a-z]{2}$",
+            pattern=r"^([a-z]{2})?$",
             hint="ISO 639-1 两字母语言代码（如 zh、en、ja），留空表示不限语言",
             tag="general",
             order=8,
