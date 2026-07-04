@@ -10,11 +10,15 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.kernel.logger import get_logger
 
 from .base import BaseParseEngine, ParseResult
+
+if TYPE_CHECKING:
+    from ..config import UrlParserConfig
+    from trafilatura.settings import Document
 
 logger = get_logger("trafilatura_engine")
 
@@ -119,7 +123,7 @@ class TrafilaturaEngine(BaseParseEngine):
                 return ParseResult.failure(url, self.engine_name, "提取的内容为空")
 
             # 合并抓取元数据和提取元数据
-            metadata: dict[str, Any] = {}
+            metadata: dict[str, object] = {}
             metadata.update(fetch_metadata)
             metadata.update(extract_metadata)
 
@@ -153,7 +157,7 @@ class TrafilaturaEngine(BaseParseEngine):
         url: str,
         timeout: int | None,
         extra_options: dict[str, Any] | None,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[str, dict[str, int | str]]:
         """使用 httpx 异步抓取 HTML。
 
         Args:
@@ -162,46 +166,52 @@ class TrafilaturaEngine(BaseParseEngine):
             extra_options: 额外选项，可覆盖 user_agent
 
         Returns:
-            (HTML 内容字符串, 抓取元数据字典) 元组
+            (HTML 内容字符串, 抓取元数据字典) 元组，元数据包含 status_code 与 redirected_url
 
         Raises:
             httpx.HTTPError: HTTP 请求失败时抛出
         """
         import httpx
 
-        cfg = self._get_trafilatura_config()
-        extra = extra_options or {}
+        cfg: UrlParserConfig.TrafilaturaSection | None = (
+            self.config.trafilatura if self.config is not None else None
+        )
+        extra: dict[str, Any] = extra_options or {}
 
         # 构建请求参数
-        default_timeout = getattr(cfg, "timeout", 15) if cfg else 15
-        request_timeout = timeout if timeout is not None else default_timeout
+        default_timeout: int = cfg.timeout if cfg is not None else 15
+        request_timeout: int = timeout if timeout is not None else default_timeout
 
-        follow_redirects = getattr(cfg, "follow_redirects", True) if cfg else True
+        follow_redirects: bool = cfg.follow_redirects if cfg is not None else True
 
-        default_ua = getattr(cfg, "user_agent", "") if cfg else ""
-        user_agent = extra.get("user_agent", default_ua) or "Mozilla/5.0 (compatible; UrlParser/1.0)"
+        default_ua: str = cfg.user_agent if cfg is not None else ""
+        user_agent: str = extra.get("user_agent", default_ua) or "Mozilla/5.0 (compatible; UrlParser/1.0)"
 
-        headers = {"User-Agent": user_agent}
+        headers: dict[str, str] = {"User-Agent": user_agent}
 
-        # 构建 client kwargs
+        # 构建 client kwargs（解包给 httpx.AsyncClient，值类型异构）
         client_kwargs: dict[str, Any] = {
             "timeout": request_timeout,
             "follow_redirects": follow_redirects,
             "headers": headers,
         }
 
-        # 代理配置
-        proxy_url = self._get_proxy_url()
+        # 代理配置：直接从配置节读取，优先 SOCKS5，其次 HTTP/HTTPS
+        proxy_url: str | None = None
+        if self.config is not None:
+            proxy_cfg = self.config.proxy
+            if proxy_cfg.enable_proxy:
+                proxy_url = proxy_cfg.socks5_proxy or proxy_cfg.http_proxy or proxy_cfg.https_proxy
         if proxy_url:
             client_kwargs["proxy"] = proxy_url
 
-        metadata: dict[str, Any] = {}
+        metadata: dict[str, int | str] = {}
 
         try:
             async with httpx.AsyncClient(**client_kwargs) as client:
                 response = await client.get(url)
                 response.raise_for_status()
-                html = response.text
+                html: str = response.text
                 metadata["status_code"] = response.status_code
                 redirected = str(response.url)
                 if redirected != url:
@@ -248,7 +258,7 @@ class TrafilaturaEngine(BaseParseEngine):
         html: str,
         url: str,
         extra_options: dict[str, Any] | None,
-    ) -> tuple[str, str, dict[str, Any], str] | None:
+    ) -> tuple[str, str, dict[str, str | list[str]], str] | None:
         """使用 trafilatura 提取正文和元数据（同步方法，在线程中调用）。
 
         Args:
@@ -263,14 +273,17 @@ class TrafilaturaEngine(BaseParseEngine):
             ValueError: trafilatura 提取过程中发生错误
         """
         from trafilatura import bare_extraction
+        from trafilatura.settings import Document
 
-        cfg = self._get_trafilatura_config()
-        extra = extra_options or {}
+        cfg: UrlParserConfig.TrafilaturaSection | None = (
+            self.config.trafilatura if self.config is not None else None
+        )
+        extra: dict[str, Any] = extra_options or {}
 
         # 从配置和 extra_options 构建提取参数
-        output_format = extra.get(
+        output_format: str = extra.get(
             "output_format",
-            getattr(cfg, "output_format", "markdown") if cfg else "markdown",
+            cfg.output_format if cfg is not None else "markdown",
         )
 
         kwargs: dict[str, Any] = {
@@ -278,34 +291,34 @@ class TrafilaturaEngine(BaseParseEngine):
             "output_format": output_format,
             "include_comments": extra.get(
                 "include_comments",
-                getattr(cfg, "include_comments", False) if cfg else False,
+                cfg.include_comments if cfg is not None else False,
             ),
             "include_tables": extra.get(
                 "include_tables",
-                getattr(cfg, "include_tables", True) if cfg else True,
+                cfg.include_tables if cfg is not None else True,
             ),
             "include_links": extra.get(
                 "include_links",
-                getattr(cfg, "include_links", False) if cfg else False,
+                cfg.include_links if cfg is not None else False,
             ),
             "deduplicate": extra.get(
                 "deduplicate",
-                getattr(cfg, "deduplicate", True) if cfg else True,
+                cfg.deduplicate if cfg is not None else True,
             ),
             "with_metadata": True,
         }
 
-        target_lang = extra.get(
+        target_lang: str = extra.get(
             "target_language",
-            getattr(cfg, "target_language", "") if cfg else "",
+            cfg.target_language if cfg is not None else "",
         )
         if target_lang:
             kwargs["target_language"] = target_lang
 
         # prune_xpath 支持（extra_options 或配置）
-        prune_xpath = extra.get(
+        prune_xpath: str | list[str] | None = extra.get(
             "prune_xpath",
-            getattr(cfg, "prune_xpath", None) if cfg else None,
+            None,  # trafilatura 配置节未暴露 prune_xpath，仅支持 extra_options 覆盖
         )
         if prune_xpath:
             kwargs["prune_xpath"] = prune_xpath
@@ -314,88 +327,47 @@ class TrafilaturaEngine(BaseParseEngine):
         if doc is None:
             return None
 
-        # 统一转换为字典访问，兼容 Document 对象和 dict 返回
-        doc_dict = self._doc_to_dict(doc)
+        # bare_extraction 默认 as_dict=False，返回 Document 对象
+        if not isinstance(doc, Document):
+            return None
 
-        content = doc_dict.get("raw_text", "") or doc_dict.get("text", "") or ""
-        title = doc_dict.get("title", "") or ""
+        content: str = doc.raw_text or doc.text or ""
+        title: str = doc.title or ""
 
-        # 构建元数据
-        metadata: dict[str, Any] = {}
-        for field in ("author", "date", "sitename", "description", "language", "hostname", "image", "fingerprint"):
-            val = doc_dict.get(field)
-            if val:
-                metadata[field] = val
+        # 构建元数据：直接访问 Document 的类型化属性
+        metadata: dict[str, str | list[str]] = {}
 
-        categories = doc_dict.get("categories")
+        author = doc.author
+        if author:
+            metadata["author"] = author
+        date = doc.date
+        if date:
+            metadata["date"] = date
+        sitename = doc.sitename
+        if sitename:
+            metadata["sitename"] = sitename
+        description = doc.description
+        if description:
+            metadata["description"] = description
+        language = doc.language
+        if language:
+            metadata["language"] = language
+        hostname = doc.hostname
+        if hostname:
+            metadata["hostname"] = hostname
+        image = doc.image
+        if image:
+            metadata["image"] = image
+        fingerprint = doc.fingerprint
+        if fingerprint:
+            metadata["fingerprint"] = fingerprint
+
+        categories = doc.categories
         if categories:
-            metadata["categories"] = list(categories) if not isinstance(categories, list) else categories
+            metadata["categories"] = categories
 
-        tags = doc_dict.get("tags")
+        tags = doc.tags
         if tags:
-            metadata["tags"] = list(tags) if not isinstance(tags, list) else tags
+            metadata["tags"] = tags
 
         return content, title, metadata, output_format
-
-    def _doc_to_dict(self, doc: Any) -> dict[str, Any]:
-        """将 trafilatura 返回的 Document 对象或 dict 统一转换为字典。
-
-        Args:
-            doc: bare_extraction 返回的对象
-
-        Returns:
-            包含提取字段的字典
-        """
-        if isinstance(doc, dict):
-            return doc
-
-        if hasattr(doc, "as_dict"):
-            try:
-                return doc.as_dict()
-            except Exception:
-                pass
-
-        # 回退：直接从对象属性读取
-        result: dict[str, Any] = {}
-        for attr in (
-            "raw_text", "text", "title", "author", "date", "url",
-            "sitename", "description", "language", "hostname", "image",
-            "fingerprint", "categories", "tags", "id", "comments",
-        ):
-            val = getattr(doc, attr, None)
-            if val is not None:
-                result[attr] = val
-        return result
-
-    def _get_trafilatura_config(self) -> Any:
-        """获取 trafilatura 配置节。
-
-        Returns:
-            trafilatura 配置节对象，配置缺失时返回 None
-        """
-        if self.config is None:
-            return None
-        return getattr(self.config, "trafilatura", None)
-
-    def _get_proxy_url(self) -> str | None:
-        """从配置获取代理 URL。
-
-        优先使用 SOCKS5 代理，其次 HTTP/HTTPS 代理。
-
-        Returns:
-            代理 URL 字符串，未配置代理时返回 None
-        """
-        if self.config is None:
-            return None
-
-        proxy_cfg = getattr(self.config, "proxy", None)
-        if proxy_cfg is None or not getattr(proxy_cfg, "enable_proxy", False):
-            return None
-
-        socks5 = getattr(proxy_cfg, "socks5_proxy", None)
-        if socks5:
-            return socks5
-
-        http_proxy = getattr(proxy_cfg, "http_proxy", None)
-        https_proxy = getattr(proxy_cfg, "https_proxy", None)
-        return http_proxy or https_proxy

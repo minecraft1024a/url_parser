@@ -8,13 +8,21 @@
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.kernel.logger import get_logger
 
 from .base import BaseParseEngine, ParseResult
 
 if TYPE_CHECKING:
+    from crawl4ai import (
+        AsyncWebCrawler,
+        BrowserConfig,
+        CrawlResult,
+        CrawlerRunConfig,
+        MarkdownGenerationResult,
+    )
+    from crawl4ai.models import CrawlResultContainer
     from ..config import UrlParserConfig
 
 logger = get_logger("crawl4ai_engine")
@@ -40,7 +48,7 @@ class Crawl4AIEngine(BaseParseEngine):
             config: 插件配置对象，用于读取 crawl4ai 配置节
         """
         super().__init__(config)
-        self._crawler: Any | None = None
+        self._crawler: AsyncWebCrawler | None = None
 
     def is_available(self) -> bool:
         """检查 Crawl4AI 引擎是否可用。
@@ -88,10 +96,14 @@ class Crawl4AIEngine(BaseParseEngine):
                 extra_options=extra_options,
             )
 
-            result = await crawler.arun(url=url, config=run_config)
+            container: CrawlResultContainer[CrawlResult] = await crawler.arun(
+                url=url, config=run_config
+            )
+            # arun 返回容器，取首个结果（单 URL 抓取场景下仅有一个元素）
+            result: CrawlResult = container[0]
 
             if not result.success:
-                error_msg = getattr(result, "error_message", None) or "未知错误"
+                error_msg: str = result.error_message or "未知错误"
                 logger.warning(f"Crawl4AI 解析 '{url}' 失败: {error_msg}")
                 return ParseResult.failure(url, self.engine_name, f"解析失败: {error_msg}")
 
@@ -105,9 +117,9 @@ class Crawl4AIEngine(BaseParseEngine):
 
             # 构建元数据
             metadata: dict[str, Any] = {}
-            if hasattr(result, "status_code") and result.status_code is not None:
+            if result.status_code is not None:
                 metadata["status_code"] = result.status_code
-            if hasattr(result, "redirected_url") and result.redirected_url:
+            if result.redirected_url:
                 metadata["redirected_url"] = result.redirected_url
 
             logger.info(f"Crawl4AI 成功解析 '{url}'，内容长度: {len(content)}")
@@ -139,7 +151,7 @@ class Crawl4AIEngine(BaseParseEngine):
 
     # ── 内部方法 ────────────────────────────────────────────────
 
-    async def _get_crawler(self) -> Any:
+    async def _get_crawler(self) -> AsyncWebCrawler:
         """获取或懒初始化 AsyncWebCrawler 实例。
 
         Returns:
@@ -158,7 +170,7 @@ class Crawl4AIEngine(BaseParseEngine):
 
         return self._crawler
 
-    def _build_browser_config(self) -> Any:
+    def _build_browser_config(self) -> BrowserConfig:
         """构建 Crawl4AI BrowserConfig。
 
         从配置的 crawl4ai 节读取浏览器参数。
@@ -168,21 +180,27 @@ class Crawl4AIEngine(BaseParseEngine):
         """
         from crawl4ai import BrowserConfig
 
-        cfg = self._get_crawl4ai_config()
+        cfg: UrlParserConfig.Crawl4AISection | None = (
+            self.config.crawl4ai if self.config is not None else None
+        )
 
         kwargs: dict[str, Any] = {
-            "headless": getattr(cfg, "headless", True),
-            "viewport_width": getattr(cfg, "viewport_width", 1280),
-            "viewport_height": getattr(cfg, "viewport_height", 720),
+            "headless": cfg.headless if cfg is not None else True,
+            "viewport_width": cfg.viewport_width if cfg is not None else 1280,
+            "viewport_height": cfg.viewport_height if cfg is not None else 720,
         }
 
-        # 代理配置
-        proxy_url = self._get_proxy_url()
+        # 代理配置：直接从配置节读取，优先 SOCKS5，其次 HTTP/HTTPS
+        proxy_url: str | None = None
+        if self.config is not None:
+            proxy_cfg = self.config.proxy
+            if proxy_cfg.enable_proxy:
+                proxy_url = proxy_cfg.socks5_proxy or proxy_cfg.http_proxy or proxy_cfg.https_proxy
         if proxy_url:
             kwargs["proxy_config"] = proxy_url
 
         # 用户代理
-        user_agent = getattr(cfg, "user_agent", "")
+        user_agent: str = cfg.user_agent if cfg is not None else ""
         if user_agent:
             kwargs["user_agent"] = user_agent
 
@@ -194,7 +212,7 @@ class Crawl4AIEngine(BaseParseEngine):
         css_selector: str | None = None,
         timeout: int | None = None,
         extra_options: dict[str, Any] | None = None,
-    ) -> Any:
+    ) -> CrawlerRunConfig:
         """构建 Crawl4AI CrawlerRunConfig。
 
         Args:
@@ -209,11 +227,16 @@ class Crawl4AIEngine(BaseParseEngine):
         from crawl4ai.content_filter_strategy import PruningContentFilter
         from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
-        cfg = self._get_crawl4ai_config()
-        extra = extra_options or {}
+        cfg: UrlParserConfig.Crawl4AISection | None = (
+            self.config.crawl4ai if self.config is not None else None
+        )
+        extra: dict[str, Any] = extra_options or {}
 
         # 内容过滤器和 Markdown 生成器
-        threshold = extra.get("content_filter_threshold", getattr(cfg, "content_filter_threshold", 0.6))
+        threshold: float = extra.get(
+            "content_filter_threshold",
+            cfg.content_filter_threshold if cfg is not None else 0.6,
+        )
         content_filter = PruningContentFilter(threshold=threshold)
         markdown_generator = DefaultMarkdownGenerator(content_filter=content_filter)
 
@@ -223,7 +246,7 @@ class Crawl4AIEngine(BaseParseEngine):
             "markdown_generator": markdown_generator,
             "remove_overlay_elements": extra.get(
                 "remove_overlay_elements",
-                getattr(cfg, "remove_overlay_elements", True),
+                cfg.remove_overlay_elements if cfg is not None else True,
             ),
         }
 
@@ -235,28 +258,31 @@ class Crawl4AIEngine(BaseParseEngine):
         if timeout is not None:
             kwargs["page_timeout"] = timeout * 1000
         else:
-            kwargs["page_timeout"] = getattr(cfg, "page_timeout", 60000)
+            kwargs["page_timeout"] = cfg.page_timeout if cfg is not None else 60000
 
         # 等待条件
-        wait_for = extra.get("wait_for", getattr(cfg, "wait_for", ""))
+        wait_for: str = extra.get("wait_for", cfg.wait_for if cfg is not None else "")
         if wait_for:
             kwargs["wait_for"] = wait_for
 
         # 抓取前延迟
-        delay = extra.get("delay_before_return_html", getattr(cfg, "delay_before_return_html", 0.0))
+        delay: float = extra.get(
+            "delay_before_return_html",
+            cfg.delay_before_return_html if cfg is not None else 0.0,
+        )
         if delay > 0:
             kwargs["delay_before_return_html"] = delay
 
         # JS 执行
-        enable_js = extra.get("enable_js", getattr(cfg, "enable_js", False))
+        enable_js: bool = extra.get("enable_js", cfg.enable_js if cfg is not None else False)
         if enable_js:
-            js_code = extra.get("js_code", getattr(cfg, "js_code", []))
+            js_code: list[str] = extra.get("js_code", cfg.js_code if cfg is not None else [])
             if js_code:
                 kwargs["js_code"] = js_code
 
         return CrawlerRunConfig(**kwargs)
 
-    def _extract_markdown(self, result: Any) -> str:
+    def _extract_markdown(self, result: CrawlResult) -> str:
         """从 CrawlResult 提取 Markdown 内容。
 
         优先使用 fit_markdown（经过过滤的高质量内容），
@@ -268,7 +294,7 @@ class Crawl4AIEngine(BaseParseEngine):
         Returns:
             Markdown 格式的正文内容
         """
-        markdown = getattr(result, "markdown", None)
+        markdown: str | MarkdownGenerationResult | None = result.markdown
         if markdown is None:
             return ""
 
@@ -277,18 +303,18 @@ class Crawl4AIEngine(BaseParseEngine):
             return markdown
 
         # 尝试 fit_markdown（过滤后内容）
-        fit_markdown = getattr(markdown, "fit_markdown", None)
+        fit_markdown: str | None = markdown.fit_markdown
         if fit_markdown:
             return fit_markdown
 
         # 回退到 raw_markdown
-        raw_markdown = getattr(markdown, "raw_markdown", None)
+        raw_markdown: str = markdown.raw_markdown
         if raw_markdown:
             return raw_markdown
 
         return ""
 
-    def _extract_title(self, result: Any) -> str:
+    def _extract_title(self, result: CrawlResult) -> str:
         """从 CrawlResult 提取页面标题。
 
         Args:
@@ -298,14 +324,14 @@ class Crawl4AIEngine(BaseParseEngine):
             页面标题，无法提取时返回 "无标题"
         """
         # 优先从 metadata 提取
-        metadata = getattr(result, "metadata", None)
-        if metadata and isinstance(metadata, dict):
-            title = metadata.get("title")
-            if title:
-                return title
+        metadata: dict[str, Any] | None = result.metadata
+        if metadata is not None:
+            title_val = metadata.get("title")
+            if isinstance(title_val, str) and title_val:
+                return title_val
 
         # 回退：从 cleaned_html 提取 <title> 标签
-        cleaned_html = getattr(result, "cleaned_html", None)
+        cleaned_html: str | None = result.cleaned_html
         if cleaned_html:
             import re
 
@@ -314,36 +340,3 @@ class Crawl4AIEngine(BaseParseEngine):
                 return title_match.group(1).strip()
 
         return "无标题"
-
-    def _get_crawl4ai_config(self) -> Any:
-        """获取 crawl4ai 配置节。
-
-        Returns:
-            crawl4ai 配置节对象，配置缺失时返回 None
-        """
-        if self.config is None:
-            return None
-        return getattr(self.config, "crawl4ai", None)
-
-    def _get_proxy_url(self) -> str | None:
-        """从配置获取代理 URL。
-
-        优先使用 SOCKS5 代理，其次 HTTP/HTTPS 代理。
-
-        Returns:
-            代理 URL 字符串，未配置代理时返回 None
-        """
-        if self.config is None:
-            return None
-
-        proxy_cfg = getattr(self.config, "proxy", None)
-        if proxy_cfg is None or not getattr(proxy_cfg, "enable_proxy", False):
-            return None
-
-        socks5 = getattr(proxy_cfg, "socks5_proxy", None)
-        if socks5:
-            return socks5
-
-        http_proxy = getattr(proxy_cfg, "http_proxy", None)
-        https_proxy = getattr(proxy_cfg, "https_proxy", None)
-        return http_proxy or https_proxy
