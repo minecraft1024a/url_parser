@@ -3,6 +3,7 @@
     "version": "1.0.0",
     "description": "URL 内容解析插件，支持多引擎（Crawl4AI）和站点级路由",
     "author": "Yishan",
+    "homepage": "https://github.com/minecraft1024a/url_parser",
     "license": "GPL-3.0",
     "keywords": [
         "url",
