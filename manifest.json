@@ -1,0 +1,56 @@
+{
+    "name": "url_parser",
+    "version": "1.0.0",
+    "description": "URL 内容解析插件，支持多引擎（Crawl4AI）和站点级路由",
+    "author": "Yishan",
+    "license": "GPL-3.0",
+    "keywords": [
+        "url",
+        "parser",
+        "crawl4ai",
+        "web",
+        "tool",
+        "service"
+    ],
+    "dependencies": {
+        "plugins": [],
+        "components": []
+    },
+    "python_dependencies": [
+        "crawl4ai>=0.4.0",
+        "httpx>=0.24.0",
+        "beautifulsoup4>=4.11.0"
+    ],
+    "include": [
+        {
+            "component_type": "tool",
+            "component_name": "parse_url",
+            "description": "URL 内容解析工具，供 LLM 调用以提取网页内容",
+            "dependencies": [],
+            "enabled": true
+        },
+        {
+            "component_type": "service",
+            "component_name": "url_parse",
+            "description": "URL 解析服务，供其他插件调用",
+            "dependencies": [],
+            "enabled": true
+        }
+    ],
+    "config": {
+        "config_file": "config.py",
+        "config_class": "UrlParserConfig"
+    },
+    "entry_point": "plugin.py",
+    "min_core_version": "1.0.0",
+    "dependencies_required": true,
+    "categories": [
+        "tool"
+    ],
+    "tags": [
+        "url",
+        "parser",
+        "crawl4ai",
+        "web"
+    ]
+}
