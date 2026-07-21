@@ -95,8 +95,8 @@ class UrlParserConfig(BaseConfig):
     代理配置以及站点路由规则。
     """
 
-    config_name: ClassVar[str] = "config"
-    config_description: ClassVar[str] = "URL 解析工具插件配置"
+    name: ClassVar[str] = "config"
+    description: ClassVar[str] = "URL 解析工具插件配置"
 
     # ── 插件基本设置 ──────────────────────────────────────────────
 

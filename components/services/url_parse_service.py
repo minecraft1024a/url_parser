@@ -32,8 +32,8 @@ class URLParseService(BaseService):
         >>> print(response.content)
     """
 
-    service_name: str = "url_parse"
-    service_description: str = "URL 内容解析服务，支持多引擎和站点路由"
+    name: str = "url_parse"
+    description: str = "URL 内容解析服务，支持多引擎和站点路由"
     version: str = "1.0.0"
 
     def __init__(self, plugin: "BasePlugin") -> None:

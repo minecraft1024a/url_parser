@@ -32,8 +32,8 @@ class URLParserTool(BaseTool):
         LLM: [自动调用 parse_url 工具]
     """
 
-    tool_name: str = "parse_url"
-    tool_description: str = (
+    name: str = "parse_url"
+    description: str = (
         "解析一个或多个网页URL，提取页面标题和正文内容。"
         "使用场景：用户发送了网页链接并希望了解其内容时调用。"
         "支持多个URL（用逗号分隔）。返回 Markdown 格式的内容。"
